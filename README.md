@@ -32,6 +32,9 @@ python egysql.py
 
     Optionally, enable verbose mode to get detailed feedback during the brute force process.
 
+
+![image](https://github.com/dragonked2/Egysql/assets/66541902/0c29c0cb-8399-41e6-94e4-c217947a0a06)
+
 Example Usage
 
 Here's an example of how you can use EgySQL to perform a brute force attack against a MongoDB service:
