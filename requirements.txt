@@ -1,0 +1,4 @@
+paramiko==2.8.0
+pymongo==3.12.0
+mysql-connector-python==8.0.27
+pyodbc==4.0.32
