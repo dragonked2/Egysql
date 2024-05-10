@@ -3,6 +3,7 @@ EgySQL is a Python-based command-line tool designed for brute-forcing MySQL serv
 Features
 
 <br>
+
 ![image](https://github.com/dragonked2/Egysql/assets/66541902/90f11cba-9a3d-43c8-8ba8-099669385bbb)
 
 
