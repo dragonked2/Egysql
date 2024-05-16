@@ -1,4 +1,4 @@
-01
+101
 EgySQL is a Python-based command-line tool designed for brute-forcing MySQL servers. It provides a simple yet powerful interface to automate the process of testing multiple username-password combinations against MySQL databases.
 Features
 
